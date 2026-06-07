@@ -1,149 +1,120 @@
 # 🌐 Multilingual Text Generation with mT5
 
-> **Cross-lingual generative modeling across English · Hindi · Bengali · French · Spanish**
+> Cross-lingual generative modelling across English · Hindi · Bengali · French · Spanish — with a focus on tokenization equity for non-Latin scripts.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/multilingual-text-generation/blob/main/multilingual_text_generation.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/parthacrj111/multilingual-text-generation/blob/main/multilingual_text_generation.ipynb)
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
 [![HuggingFace](https://img.shields.io/badge/🤗-Transformers-yellow)](https://huggingface.co/google/mt5-small)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## 📌 Overview
+## What this is
 
-This project demonstrates **end-to-end multilingual text generation** using Google's `mT5-small` — a massively multilingual T5 model pretrained on 101 languages via a shared sentencepiece vocabulary of 250,000 tokens.
+This project builds an end-to-end multilingual text generation pipeline using Google's `mT5-small` — a 300M parameter encoder-decoder model pretrained on 101 languages. The full pipeline covers data preparation, tokenization analysis, beam-search decoding, BLEU evaluation, and encoder attention visualization across three distinct writing systems: Latin, Devanagari, and Bengali.
 
-The notebook covers the **full generative modeling pipeline**: data preparation → tokenization analysis → beam-search decoding → quantitative evaluation (BLEU) → attention visualization — across three distinct writing scripts (Latin, Devanagari, Bengali).
+The core research question is simple: **do multilingual models serve all languages equally?** The short answer is no, and this project quantifies exactly why.
 
-This work was built as part of a broader research portfolio in applied ML and NLP, with particular focus on the engineering challenges of building language systems that serve international users equitably.
+**The main finding:** Hindi and Bengali users consume 2–4× more tokens to represent the same semantic content compared to English or French users. With a fixed context window, this translates directly to fewer effective input tokens — a measurable equity gap baked into the model's shared vocabulary design. This matters for anyone building production multilingual systems and isn't measured nearly enough.
+
+Runs entirely on free Colab GPU. No paid compute required.
 
 ---
 
-## 🔬 What's Inside
+## What's inside
 
-| Section | Description |
+| Section | What it does |
 |---|---|
-| **1. Environment Setup** | Install `transformers`, `sentencepiece`, `sacrebleu`, `datasets` |
-| **2. Model Loading** | `google/mt5-small` (300M params) on GPU/CPU |
-| **3. Multilingual Corpus** | Parallel news-style paragraphs in 5 languages / 3 scripts |
-| **4. Text Generation** | Beam search decoding (`num_beams=4`) per language |
-| **5. BLEU Evaluation** | `sacrebleu` sentence-level scoring with Unicode handling |
-| **6. Token Fertility Analysis** | Subword tokens / words ratio — quantifies script-level tokenization cost |
-| **7. Attention Heatmaps** | Encoder self-attention visualization (final layer, head 0) |
-| **8. Results Summary** | Key findings and production implications |
+| Environment setup | Installs `transformers`, `sentencepiece`, `sacrebleu`, `datasets` |
+| Model loading | `google/mt5-small` (300M params) on GPU or CPU |
+| Multilingual corpus | Parallel news-style paragraphs across 5 languages / 3 scripts |
+| Text generation | Beam search decoding (`num_beams=4`) per language |
+| BLEU evaluation | `sacrebleu` sentence-level scoring with Unicode handling |
+| Token fertility analysis | Subword tokens ÷ words — quantifies tokenization overhead per script |
+| Attention heatmaps | Encoder self-attention visualization (final layer, head 0) |
+| Results summary | Key findings and what they mean for production systems |
 
 ---
 
-## 🚀 Quick Start
+## Results
 
-### Option A — Google Colab (recommended, free GPU)
-Click the **Open in Colab** badge above. Runtime → Change runtime type → **GPU**. Then Run All.
+### Token fertility by language
 
-### Option B — Local
+Token fertility = subword tokens ÷ whitespace-separated words. Higher = more tokenization overhead = less effective context for the same model capacity.
+
+| Language | Script | Fertility | Notes |
+|---|---|---|---|
+| English | Latin | ~1.4× | Baseline |
+| French | Latin | ~1.5× | Slight inflation from compound words |
+| Spanish | Latin | ~1.5× | Similar to French |
+| Hindi | Devanagari | ~2.8× | Morphological complexity |
+| Bengali | Bengali | ~3.1× | Highest overhead in this set |
+
+**Why this matters in production:** A 2,048-token context window effectively becomes ~660 tokens for Bengali input. Fertility-aware batching and vocabulary expansion are not optional for equitable multilingual deployment — they're load-bearing.
+
+---
+
+## Quick start
+
+**Option A — Colab (recommended)**
+
+Click the badge above. Runtime → Change runtime type → GPU → Run All.
+
+**Option B — Local**
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/multilingual-text-generation.git
+git clone https://github.com/parthacrj111/multilingual-text-generation.git
 cd multilingual-text-generation
 pip install -r requirements.txt
 jupyter notebook multilingual_text_generation.ipynb
 ```
 
-**requirements.txt**
-```
-transformers>=4.35.0
-sentencepiece>=0.1.99
-sacrebleu>=2.3.1
-datasets>=2.14.0
-torch>=2.0.0
-seaborn>=0.12.0
-matplotlib>=3.7.0
-numpy>=1.24.0
-nbformat>=5.9.0
-```
-
 ---
 
-## 📊 Sample Results
-
-### Token Fertility by Language
-Token fertility = subword tokens ÷ whitespace-separated words. Higher values mean greater tokenization overhead — an equity concern for non-Latin script communities.
-
-| Language | Script | Fertility | Notes |
-|---|---|---|---|
-| English | Latin | ~1.4× | Baseline |
-| French | Latin | ~1.5× | Compound words inflate slightly |
-| Spanish | Latin | ~1.5× | Similar to French |
-| Hindi | Devanagari | ~2.8× | Morphological complexity |
-| Bengali | Bengali | ~3.1× | Highest overhead in this set |
-
-### Key Finding
-> Non-Latin scripts (Devanagari, Bengali) require **2–4× more tokens** to represent the same semantic content. This means users of these languages receive fewer effective context tokens for the same model capacity — a critical fairness issue that production multilingual systems must address through fertility-aware batching and vocabulary expansion.
-
----
-
-## 🧠 Technical Design Decisions
-
-### Why mT5?
-- **Shared 250k sentencepiece vocabulary** across 101 languages enables zero-shot cross-lingual transfer
-- **Encoder-decoder architecture** is optimal for conditional generation (summarization, translation, QA)
-- **Small variant (300M params)** is fully runnable on free Colab GPU — reproducible without enterprise compute
-- Direct architectural ancestor of models used in production multilingual AI systems
-
-### Why Abstractive Summarization?
-Summarization is an ideal probe task for generative models: it requires the model to **understand** the input (compression) and **generate** novel text (not just copy). Comparing quality across languages on identical semantic content isolates the model's multilingual capability from content difficulty.
-
-### Evaluation Strategy
-- **BLEU** — n-gram precision, Unicode-aware via `sacrebleu`; imperfect for morphologically rich languages but useful for cross-language comparison
-- **Token Fertility** — custom metric surfacing tokenization equity gaps
-- **Attention Visualization** — qualitative inspection of what the model attends to across scripts
-
----
-
-## 🗺️ Project Structure
+## Repository structure
 
 ```
 multilingual-text-generation/
-│
-├── multilingual_text_generation.ipynb   # Main Colab notebook
-├── README.md                            # This file
-├── requirements.txt                     # Python dependencies
-├── outputs/
-│   ├── multilingual_analysis.png        # BLEU + fertility bar charts
-│   ├── attention_en.png                 # English attention heatmap
-│   └── attention_hi.png                 # Hindi attention heatmap
+├── multilingual_text_generation.ipynb   # Main notebook
+├── Copy_of_multilingual_text_generation.ipynb  # Original Colab draft (archived)
+├── README.md
+├── requirements.txt
 └── LICENSE
 ```
 
 ---
 
-## 🔭 Future Work
+## Design decisions worth knowing
 
-- [ ] Fine-tune on `mC4` multilingual corpus with language-balanced sampling
-- [ ] Add **ChrF++** evaluation (better for morphologically rich languages)
-- [ ] Implement **RLHF reward model** for cultural appropriateness scoring
+**Why mT5?** The shared 250k SentencePiece vocabulary across 101 languages enables zero-shot cross-lingual transfer without fine-tuning. The small variant (300M params) is fully reproducible on free compute — no enterprise GPU required — which matters for accessibility.
+
+**Why summarization as the probe task?** It forces the model to both understand (compress) and generate (not just copy), which isolates multilingual capability from content difficulty. Good test bed for comparing cross-lingual performance on identical semantic content.
+
+**Why token fertility as a metric?** BLEU measures output quality. Fertility measures input fairness. Most multilingual benchmarks report the former and ignore the latter. This project argues both matter.
+
+---
+
+## What's next
+
+- [ ] Fine-tune on `mC4` with language-balanced sampling
+- [ ] Add ChrF++ evaluation (better for morphologically rich languages)
+- [ ] Implement RLHF reward model for cultural appropriateness scoring
 - [ ] Extend to low-resource languages: Swahili, Tamil, Urdu
 - [ ] Fertility-aware dynamic batching for equitable inference throughput
-- [ ] Compare against `BLOOM`, `mBART-50`, and `NLLB-200`
+- [ ] Compare against BLOOM, mBART-50, and NLLB-200
 
 ---
 
-## 👤 Author
+## About the author
 
-**Partha Sarathi Banerjee**  
-Machine Learning Engineer · Generative AI & NLP  
-M.Tech Information Technology (CGPA 9.53/10) — IIEST Shibpur  
-IBM AI Engineering Certified · IBM Data Science Certified
+**Partha Sarathi Banerjee** — ML Engineer, Generative AI & NLP  
+M.Tech IT, IIEST Shibpur (9.53/10 CGPA) · IBM AI Engineering Certified · Published @ CINS 2025
 
-📧 parthacrj111@gmail.com  
-🔗 [LinkedIn](https://linkedin.com/in/partha-sarathi-banerjee-607b33a2)
-
-**Research:** Q-Learning for EV Route Optimization (CINS 2025) · Level-2 ADAS Pipelines (Daimler Truck Innovation Centre India)
+[LinkedIn](https://linkedin.com/in/partha-sarathi-banerjee-607b33a2) · [parthacrj111@gmail.com](mailto:parthacrj111@gmail.com)
 
 ---
 
-## 📄 License
+*If this was useful, a ⭐ helps other people find it.*
 
-MIT License — free to use, adapt, and build upon with attribution.
-
----
 
 *If this project helped you, please ⭐ the repo.*
